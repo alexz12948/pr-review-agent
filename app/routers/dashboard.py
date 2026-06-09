@@ -77,4 +77,4 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Render the dashboard HTML template."""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+    return templates.TemplateResponse(request, "dashboard.html")
