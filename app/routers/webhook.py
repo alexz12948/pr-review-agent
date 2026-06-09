@@ -16,6 +16,10 @@ router = APIRouter()
 
 def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
     """Verify the X-Hub-Signature-256 header using HMAC-SHA256."""
+    # Refuse to verify when no secret is configured: an empty key would allow
+    # an attacker to forge a valid signature and bypass verification.
+    if not secret:
+        return False
     if not signature.startswith("sha256="):
         return False
     expected = hmac.new(
