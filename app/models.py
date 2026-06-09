@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
 class ReviewRecord(SQLModel, table=True):
     __tablename__ = "review_records"
     __table_args__ = (
+        UniqueConstraint("repo", "pr_number", "head_sha", name="uq_repo_pr_sha"),
         {"sqlite_autoincrement": True},
     )
 
@@ -27,15 +29,3 @@ class ReviewRecord(SQLModel, table=True):
     status: str = "success"  # "success" | "partial" | "failed"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    class Config:
-        # Unique constraint on (repo, pr_number, head_sha) for idempotency
-        pass
-
-
-# Add the unique constraint via SQLAlchemy
-from sqlalchemy import UniqueConstraint  # noqa: E402
-
-ReviewRecord.__table_args__ = (
-    UniqueConstraint("repo", "pr_number", "head_sha", name="uq_repo_pr_sha"),
-    {"sqlite_autoincrement": True},
-)
