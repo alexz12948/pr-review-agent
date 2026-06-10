@@ -14,9 +14,11 @@ import hmac
 import json
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
+from app.database import init_db
 from app.main import app
 
 # Set a known webhook secret for testing
@@ -57,6 +59,14 @@ def _override_settings(monkeypatch):
     monkeypatch.setattr(settings, "GITHUB_WEBHOOK_SECRET", TEST_WEBHOOK_SECRET)
     monkeypatch.setattr(settings, "DEVIN_API_KEY", "fake-devin-key")
     monkeypatch.setattr(settings, "GITHUB_TOKEN", "fake-github-token")
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _init_test_db():
+    """Ensure the DB tables exist before each test."""
+    import os
+    os.makedirs("data", exist_ok=True)
+    await init_db()
 
 
 @pytest.mark.asyncio
