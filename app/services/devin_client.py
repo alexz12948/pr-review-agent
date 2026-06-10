@@ -53,7 +53,7 @@ async def poll_session(session_id: str, timeout: int = 600, interval: int = 10) 
 
 async def send_message(session_id: str, message: str) -> dict:
     """Send a message to an existing Devin session."""
-    url = f"{DEVIN_API_BASE}/session/{session_id}/message"
+    url = f"{DEVIN_API_BASE}/sessions/{session_id}/message"
     headers = {
         "Authorization": f"Bearer {settings.DEVIN_API_KEY}",
         "Content-Type": "application/json",

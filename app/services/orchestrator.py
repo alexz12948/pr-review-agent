@@ -3,6 +3,8 @@ import json
 import logging
 import time
 
+from sqlmodel import select
+
 from app.database import async_session
 from app.models import ReviewRecord
 from app.services.devin_client import create_session, poll_session
@@ -41,7 +43,7 @@ def _parse_finding_counts(output: str) -> dict:
             severity = f.get("severity", "").lower()
             if severity in counts:
                 counts[severity] += 1
-    except (json.JSONDecodeError, AttributeError):
+    except (json.JSONDecodeError, AttributeError, TypeError):
         logger.warning("Could not parse findings JSON")
     return counts
 
@@ -108,26 +110,28 @@ async def run_orchestrator(pr_payload: dict) -> None:
 
         latency = time.time() - start_time
 
-        # 9. Save ReviewRecord to the database
-        record = ReviewRecord(
-            repo=repo,
-            pr_number=pr_number,
-            head_sha=head_sha,
-            security_findings=sec_counts["total"],
-            quality_findings=qual_counts["total"],
-            critical_count=sec_counts["critical"],
-            high_count=sec_counts["high"],
-            medium_count=sec_counts["medium"],
-            low_count=sec_counts["low"],
-            latency_seconds=latency,
-            orchestrator_session_id=synthesis_sid,
-            security_session_id=security_sid,
-            quality_session_id=quality_sid,
-            status="success",
-        )
-
+        # 9. Update the placeholder ReviewRecord in the database
         async with async_session() as db:
-            db.add(record)
+            stmt = select(ReviewRecord).where(
+                ReviewRecord.repo == repo,
+                ReviewRecord.pr_number == pr_number,
+                ReviewRecord.head_sha == head_sha,
+            )
+            result = await db.execute(stmt)
+            record = result.scalars().first()
+            if record:
+                record.security_findings = sec_counts["total"]
+                record.quality_findings = qual_counts["total"]
+                record.critical_count = sec_counts["critical"]
+                record.high_count = sec_counts["high"]
+                record.medium_count = sec_counts["medium"]
+                record.low_count = sec_counts["low"]
+                record.latency_seconds = latency
+                record.orchestrator_session_id = synthesis_sid
+                record.security_session_id = security_sid
+                record.quality_session_id = quality_sid
+                record.status = "success"
+                db.add(record)
             await db.commit()
 
         logger.info(
@@ -138,21 +142,23 @@ async def run_orchestrator(pr_payload: dict) -> None:
         latency = time.time() - start_time
         logger.exception("Orchestrator failed for %s #%d", repo, pr_number)
 
-        # Save a failed record
-        record = ReviewRecord(
-            repo=repo,
-            pr_number=pr_number,
-            head_sha=head_sha,
-            latency_seconds=latency,
-            orchestrator_session_id=synthesis_sid,
-            security_session_id=security_sid,
-            quality_session_id=quality_sid,
-            status="failed",
-        )
-
+        # Update the placeholder record to failed status
         try:
             async with async_session() as db:
-                db.add(record)
+                stmt = select(ReviewRecord).where(
+                    ReviewRecord.repo == repo,
+                    ReviewRecord.pr_number == pr_number,
+                    ReviewRecord.head_sha == head_sha,
+                )
+                result = await db.execute(stmt)
+                record = result.scalars().first()
+                if record:
+                    record.latency_seconds = latency
+                    record.orchestrator_session_id = synthesis_sid
+                    record.security_session_id = security_sid
+                    record.quality_session_id = quality_sid
+                    record.status = "failed"
+                    db.add(record)
                 await db.commit()
         except Exception:
             logger.exception("Failed to save failure record")

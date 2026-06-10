@@ -26,6 +26,6 @@ class ReviewRecord(SQLModel, table=True):
     orchestrator_session_id: str = ""
     security_session_id: str = ""
     quality_session_id: str = ""
-    status: str = "success"  # "success" | "partial" | "failed"
+    status: str = "pending"  # "pending" | "success" | "partial" | "failed"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

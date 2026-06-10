@@ -69,6 +69,16 @@ async def github_webhook(
     if existing:
         return JSONResponse(status_code=200, content={"detail": "Review already exists for this SHA"})
 
+    # Insert a placeholder record to prevent TOCTOU race with GitHub retries
+    placeholder = ReviewRecord(
+        repo=repo,
+        pr_number=pr_number,
+        head_sha=head_sha,
+        status="pending",
+    )
+    db.add(placeholder)
+    await db.commit()
+
     # Dispatch orchestrator as a background task
     background_tasks.add_task(run_orchestrator, body)
 
