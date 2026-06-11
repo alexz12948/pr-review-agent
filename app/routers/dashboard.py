@@ -8,13 +8,9 @@ from sqlmodel import select
 
 from app.database import get_db
 from app.models import ReviewRecord
+from app.paths import FRONTEND_INDEX
 
 router = APIRouter()
-
-# The dashboard is a Vite-built React app. FastAPI serves the compiled assets
-# from frontend/dist (built via `npm run build`).
-FRONTEND_DIST = os.path.join("frontend", "dist")
-FRONTEND_INDEX = os.path.join(FRONTEND_DIST, "index.html")
 
 
 @router.get("/api/reviews")
@@ -81,7 +77,6 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    """Serve the built React dashboard (frontend/dist/index.html)."""
     if os.path.exists(FRONTEND_INDEX):
         return FileResponse(FRONTEND_INDEX)
     return HTMLResponse(

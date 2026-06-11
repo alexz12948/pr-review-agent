@@ -6,11 +6,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
+from app.paths import FRONTEND_DIST
 from app.routers import webhook, dashboard
-
-# Compiled Vite assets (JS/CSS) live under frontend/dist; the dashboard route
-# serves index.html and these assets are referenced under /static.
-FRONTEND_DIST = os.path.join("frontend", "dist")
 
 
 @asynccontextmanager
