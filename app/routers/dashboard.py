@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+import os
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -9,7 +10,11 @@ from app.database import get_db
 from app.models import ReviewRecord
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+
+# The dashboard is a Vite-built React app. FastAPI serves the compiled assets
+# from frontend/dist (built via `npm run build`).
+FRONTEND_DIST = os.path.join("frontend", "dist")
+FRONTEND_INDEX = os.path.join(FRONTEND_DIST, "index.html")
 
 
 @router.get("/api/reviews")
@@ -75,6 +80,13 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Render the dashboard HTML template."""
-    return templates.TemplateResponse(request, "dashboard.html")
+async def dashboard():
+    """Serve the built React dashboard (frontend/dist/index.html)."""
+    if os.path.exists(FRONTEND_INDEX):
+        return FileResponse(FRONTEND_INDEX)
+    return HTMLResponse(
+        "<h1>Dashboard not built</h1>"
+        "<p>Run <code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code> "
+        "to build the React dashboard.</p>",
+        status_code=503,
+    )

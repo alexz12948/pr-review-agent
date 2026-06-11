@@ -2,10 +2,15 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
 from app.routers import webhook, dashboard
+
+# Compiled Vite assets (JS/CSS) live under frontend/dist; the dashboard route
+# serves index.html and these assets are referenced under /static.
+FRONTEND_DIST = os.path.join("frontend", "dist")
 
 
 @asynccontextmanager
@@ -26,6 +31,9 @@ app = FastAPI(title="PR Review Agent", lifespan=lifespan)
 
 app.include_router(webhook.router)
 app.include_router(dashboard.router)
+
+if os.path.isdir(FRONTEND_DIST):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIST), name="static")
 
 
 @app.get("/health")
