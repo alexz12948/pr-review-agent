@@ -142,12 +142,18 @@ async def run_orchestrator(pr_payload: dict) -> None:
         qual_output = _extract_output(qual_result)
 
         # 5. Create synthesis session and poll it
-        synth_prompt = synthesis_prompt(sec_output, qual_output, pr_metadata)
+        # synthesis_prompt uses f-string interpolation, so ensure string form
+        sec_output_str = json.dumps(sec_output) if isinstance(sec_output, dict) else sec_output
+        qual_output_str = json.dumps(qual_output) if isinstance(qual_output, dict) else qual_output
+        synth_prompt = synthesis_prompt(sec_output_str, qual_output_str, pr_metadata)
         synthesis_sid = await create_session(synth_prompt)
         synth_result = await poll_session(synthesis_sid)
 
         # 6. Extract the final markdown
         final_comment = _extract_output(synth_result)
+        # GitHub API expects a string body; guard against dict output
+        if isinstance(final_comment, dict):
+            final_comment = json.dumps(final_comment, indent=2)
 
         # 7. Post the review comment to GitHub
         await post_review_comment(repo, pr_number, final_comment)
