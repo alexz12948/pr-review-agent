@@ -13,7 +13,7 @@ export default function StatCards({ stats }) {
         <div className="value" id="total-prs">{totalPrs}</div>
       </div>
       <div className="card">
-        <h3>Avg Latency</h3>
+        <h3>Avg Review Latency</h3>
         <div className="value" id="avg-latency">{avgLatency}</div>
       </div>
       <div className="card">

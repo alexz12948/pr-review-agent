@@ -27,7 +27,7 @@ async def get_pr_metadata(repo: str, pr_number: int) -> dict:
         "Accept": "application/vnd.github.v3+json",
     }
     async with httpx.AsyncClient() as client:
-        resp = await client.get(url, headers=headers, timeout=60.0)
+        resp = await client.get(url, headers=headers, timeout=10.0)
         resp.raise_for_status()
         data = resp.json()
     return {
