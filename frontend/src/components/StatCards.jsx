@@ -3,8 +3,9 @@ export default function StatCards({ stats }) {
   const avgLatency = stats ? `${stats.avg_latency}s` : "—";
   let totalFindings = "—";
   if (stats) {
-    const tf = stats.total_findings;
-    totalFindings = tf.critical + tf.high + tf.medium + tf.low;
+    totalFindings =
+      (stats.total_security_findings || 0) +
+      (stats.total_quality_findings || 0);
   }
   return (
     <div className="cards">

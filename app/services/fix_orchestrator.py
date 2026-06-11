@@ -33,18 +33,21 @@ def _finding_to_dict(finding: Finding) -> dict:
     }
 
 
-def _parse_fix_result(output: str) -> dict:
-    """Parse the JSON result emitted by a fix agent."""
+def _parse_fix_result(output) -> dict:
+    """Parse the JSON result emitted by a fix agent.
+
+    ``output`` may be a *str* (JSON text) or a *dict*.
+    """
     result = {"status": None, "commit_sha": None, "summary": None}
     try:
-        data = json.loads(output)
+        data = output if isinstance(output, dict) else json.loads(output)
         if isinstance(data, dict):
             result["status"] = data.get("status")
             result["commit_sha"] = data.get("commit_sha")
             result["summary"] = data.get("summary")
     except (json.JSONDecodeError, TypeError):
         logger.warning("Could not parse fix result JSON; storing raw output")
-        result["summary"] = output[:2000] if output else None
+        result["summary"] = str(output)[:2000] if output else None
     return result
 
 
