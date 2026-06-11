@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import FRONTEND_DIST, settings
 from app.database import init_db
 from app.routers import webhook, dashboard
+from app.routers.fixes import router as fixes_router
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app = FastAPI(title="PR Review Agent", lifespan=lifespan)
 
 app.include_router(webhook.router)
 app.include_router(dashboard.router)
+app.include_router(fixes_router)
 
 if os.path.isdir(FRONTEND_DIST):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIST), name="static")

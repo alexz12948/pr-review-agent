@@ -19,6 +19,27 @@ async def get_pr_diff(repo: str, pr_number: int) -> str:
         return resp.text
 
 
+async def get_pr_metadata(repo: str, pr_number: int) -> dict:
+    """Fetch metadata for a pull request (branch, title, html_url, etc.)."""
+    url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}"
+    headers = {
+        "Authorization": f"Bearer {settings.GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=headers, timeout=60.0)
+        resp.raise_for_status()
+        data = resp.json()
+    return {
+        "repo": repo,
+        "pr_number": pr_number,
+        "title": data.get("title", ""),
+        "branch": data.get("head", {}).get("ref", ""),
+        "head_sha": data.get("head", {}).get("sha", ""),
+        "html_url": data.get("html_url", ""),
+    }
+
+
 async def post_review_comment(repo: str, pr_number: int, body: str) -> dict:
     """Post a comment on a pull request."""
     url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"

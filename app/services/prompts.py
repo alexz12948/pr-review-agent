@@ -115,3 +115,83 @@ and any recommended actions.
 Respond with ONLY the Markdown text (no JSON wrapping, no code fences around the whole response). \
 The output should be ready to post directly as a GitHub comment.
 """
+
+
+def fix_single_prompt(finding: dict, diff: str, pr_metadata: dict) -> str:
+    """Build a prompt for a fix agent that addresses a single finding."""
+    repo = pr_metadata.get("repo", "")
+    branch = pr_metadata.get("branch") or pr_metadata.get("head_ref") or "main"
+    agent_type = finding.get("agent_type", "")
+    severity_or_category = finding.get("severity") or finding.get("category") or "n/a"
+    title = finding.get("title", "")
+    description = finding.get("description", "")
+    file = finding.get("file", "n/a")
+    line = finding.get("line", "n/a")
+    return f"""You are a code fix agent. You have access to the repository {repo} on branch {branch}.
+
+A PR review found the following issue:
+- Type: {agent_type}
+- Severity/Category: {severity_or_category}
+- Title: {title}
+- Description: {description}
+- File: {file}, Line: {line}
+
+Original PR diff for context:
+{diff}
+
+Instructions:
+1. Clone the repository and checkout branch {branch}
+2. Navigate to the identified file and line
+3. Implement a fix that addresses the finding
+4. Ensure existing tests still pass
+5. Commit with message: "fix: {title} [auto-fix]"
+6. Push to the branch
+
+Output JSON: {{"status": "fixed"|"skipped", "commit_sha": "...", "summary": "..."}}
+"""
+
+
+def fix_batch_prompt(findings_list: list[dict], diff: str, pr_metadata: dict) -> str:
+    """Build a prompt for a fix agent that addresses multiple findings at once."""
+    repo = pr_metadata.get("repo", "")
+    branch = pr_metadata.get("branch") or pr_metadata.get("head_ref") or "main"
+
+    lines = []
+    for idx, finding in enumerate(findings_list, start=1):
+        agent_type = finding.get("agent_type", "")
+        severity_or_category = (
+            finding.get("severity") or finding.get("category") or "n/a"
+        )
+        title = finding.get("title", "")
+        description = finding.get("description", "")
+        file = finding.get("file", "n/a")
+        line = finding.get("line", "n/a")
+        lines.append(
+            f"""### Finding {idx} (id={finding.get("id")})
+- Type: {agent_type}
+- Severity/Category: {severity_or_category}
+- Title: {title}
+- Description: {description}
+- File: {file}, Line: {line}"""
+        )
+    findings_block = "\n\n".join(lines) if lines else "(no findings provided)"
+
+    return f"""You are a code fix agent. You have access to the repository {repo} on branch {branch}.
+
+A PR review found the following {len(findings_list)} issue(s):
+
+{findings_block}
+
+Original PR diff for context:
+{diff}
+
+Instructions:
+1. Clone the repository and checkout branch {branch}
+2. Address every finding listed above
+3. Implement fixes for each finding, navigating to the identified files and lines
+4. Ensure existing tests still pass
+5. Make one or more commits, each with a message describing the fix and ending in "[auto-fix]"
+6. Push to the branch
+
+Output JSON: {{"status": "fixed"|"skipped", "commit_sha": "...", "summary": "..."}}
+"""
