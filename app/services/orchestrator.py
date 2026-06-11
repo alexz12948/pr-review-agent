@@ -104,8 +104,12 @@ def _parse_finding_counts(output) -> dict:
         logger.warning("Could not parse findings JSON")
         return counts
     findings = data.get("findings", [])
+    if not isinstance(findings, list):
+        return counts
     counts["total"] = len(findings)
     for f in findings:
+        if not isinstance(f, dict):
+            continue
         severity = (f.get("severity") or "").lower()
         if severity in severity_keys:
             counts[severity] += 1
