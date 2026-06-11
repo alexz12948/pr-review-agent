@@ -6,7 +6,7 @@ import time
 from sqlmodel import select
 
 from app.database import async_session
-from app.models import ReviewRecord
+from app.models import Finding, ReviewRecord
 from app.services.devin_client import create_session, poll_session
 from app.services.github_client import get_pr_diff, post_review_comment
 from app.services.prompts import quality_prompt, security_prompt, synthesis_prompt
@@ -46,6 +46,42 @@ def _parse_finding_counts(output: str) -> dict:
     except (json.JSONDecodeError, AttributeError, TypeError):
         logger.warning("Could not parse findings JSON")
     return counts
+
+
+def _parse_findings(output: str) -> list[dict]:
+    """Parse the raw list of findings from an agent's JSON output."""
+    try:
+        data = json.loads(output)
+        findings = data.get("findings", [])
+        if isinstance(findings, list):
+            return [f for f in findings if isinstance(f, dict)]
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        logger.warning("Could not parse findings JSON")
+    return []
+
+
+def _build_finding_rows(
+    review_id: int, agent_type: str, findings: list[dict]
+) -> list[Finding]:
+    """Convert raw finding dicts into Finding ORM rows for one agent."""
+    rows: list[Finding] = []
+    for f in findings:
+        severity = f.get("severity")
+        category = f.get("category")
+        rows.append(
+            Finding(
+                review_id=review_id,
+                agent_type=agent_type,
+                severity=severity.lower() if isinstance(severity, str) else None,
+                category=category.lower() if isinstance(category, str) else None,
+                title=str(f.get("title", "") or "")[:500] or "(untitled finding)",
+                description=str(f.get("description", "") or ""),
+                file=f.get("file") if isinstance(f.get("file"), str) else None,
+                line=f.get("line") if isinstance(f.get("line"), int) else None,
+                raw_json=json.dumps(f),
+            )
+        )
+    return rows
 
 
 async def run_orchestrator(pr_payload: dict) -> None:
@@ -104,9 +140,11 @@ async def run_orchestrator(pr_payload: dict) -> None:
         # 7. Post the review comment to GitHub
         await post_review_comment(repo, pr_number, final_comment)
 
-        # 8. Parse finding counts
+        # 8. Parse finding counts and the individual findings
         sec_counts = _parse_finding_counts(sec_output)
         qual_counts = _parse_finding_counts(qual_output)
+        sec_findings = _parse_findings(sec_output)
+        qual_findings = _parse_findings(qual_output)
 
         latency = time.time() - start_time
 
@@ -131,7 +169,15 @@ async def run_orchestrator(pr_payload: dict) -> None:
                 record.security_session_id = security_sid
                 record.quality_session_id = quality_sid
                 record.status = "success"
+                record.has_pending_fixes = bool(sec_findings or qual_findings)
                 db.add(record)
+                await db.flush()  # ensure record.id is populated
+
+                finding_rows = _build_finding_rows(
+                    record.id, "security", sec_findings
+                ) + _build_finding_rows(record.id, "quality", qual_findings)
+                for fr in finding_rows:
+                    db.add(fr)
             await db.commit()
 
         logger.info(

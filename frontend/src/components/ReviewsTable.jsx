@@ -1,4 +1,4 @@
-export default function ReviewsTable({ reviews, loading, error }) {
+export default function ReviewsTable({ reviews, loading, error, onRowClick }) {
   let body;
   if (loading) {
     body = (
@@ -23,10 +23,17 @@ export default function ReviewsTable({ reviews, loading, error }) {
       const prUrl = `https://github.com/${r.repo}/pull/${r.pr_number}`;
       const date = new Date(r.created_at).toLocaleDateString();
       return (
-        <tr key={r.id}>
+        <tr key={r.id} onClick={() => onRowClick && onRowClick(r)}>
           <td>{r.repo}</td>
           <td>
-            <a href={prUrl} target="_blank" rel="noreferrer">#{r.pr_number}</a>
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{r.pr_number}
+            </a>
           </td>
           <td className={`status-${r.status}`}>{r.status}</td>
           <td>{r.security_findings}</td>

@@ -8,7 +8,7 @@ from sqlmodel import select
 
 from app.config import FRONTEND_INDEX
 from app.database import get_db
-from app.models import ReviewRecord
+from app.models import FixAction, ReviewRecord
 
 router = APIRouter()
 
@@ -61,6 +61,31 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     severity_result = await db.execute(severity_stmt)
     row = severity_result.one()
 
+    # Fix-related aggregates
+    total_fix_stmt = select(func.count(FixAction.id))
+    total_fix_actions = (await db.execute(total_fix_stmt)).scalar() or 0
+
+    successful_fix_stmt = select(func.count(FixAction.id)).where(
+        FixAction.status == "completed"
+    )
+    successful_fixes = (await db.execute(successful_fix_stmt)).scalar() or 0
+
+    failed_fix_stmt = select(func.count(FixAction.id)).where(
+        FixAction.status == "failed"
+    )
+    failed_fixes = (await db.execute(failed_fix_stmt)).scalar() or 0
+
+    avg_fix_latency_stmt = select(func.avg(FixAction.latency_seconds)).where(
+        FixAction.latency_seconds.is_not(None)
+    )
+    avg_fix_latency = (await db.execute(avg_fix_latency_stmt)).scalar() or 0.0
+
+    fix_success_rate = (
+        round(successful_fixes / total_fix_actions, 4)
+        if total_fix_actions
+        else 0.0
+    )
+
     return {
         "total_prs": total_prs,
         "avg_latency": round(avg_latency, 2),
@@ -72,6 +97,13 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         },
         "total_security_findings": row[4] or 0,
         "total_quality_findings": row[5] or 0,
+        "fix_stats": {
+            "total_fix_actions": total_fix_actions,
+            "successful_fixes": successful_fixes,
+            "failed_fixes": failed_fixes,
+            "fix_success_rate": fix_success_rate,
+            "avg_fix_latency": round(avg_fix_latency, 2),
+        },
     }
 
 

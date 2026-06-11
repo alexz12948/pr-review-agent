@@ -10,17 +10,61 @@ h2 { margin-bottom: 12px; }
 
 .chart-container { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 32px; max-width: 400px; }
 .chart-title { margin-bottom: 16px; color: #888; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.hint { color: #888; font-size: 0.85rem; margin-bottom: 10px; }
 
 table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid #eee; }
 th { background: #1a1a2e; color: #fff; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+tbody tr { cursor: pointer; }
 tr:hover { background: #f9f9fb; }
 
-.status-success { color: #27ae60; font-weight: 600; }
+.status-success, .status-completed, .status-fixed { color: #27ae60; font-weight: 600; }
 .status-failed { color: #e74c3c; font-weight: 600; }
-.status-partial { color: #f39c12; font-weight: 600; }
-.status-pending { color: #f39c12; font-weight: 600; }
+.status-partial, .status-pending, .status-queued { color: #f39c12; font-weight: 600; }
+.status-in_progress { color: #2980b9; font-weight: 600; }
 
 a { color: #2980b9; text-decoration: none; }
 a:hover { text-decoration: underline; }
 .loading { color: #aaa; font-style: italic; }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: #fff; }
+.sev-critical { background: #e74c3c; }
+.sev-high { background: #e67e22; }
+.sev-medium { background: #f1c40f; color: #333; }
+.sev-low { background: #3498db; }
+.sev-info { background: #95a5a6; }
+.cat-badge { background: #8e44ad; }
+.agent-security { background: #c0392b; }
+.agent-quality { background: #16a085; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; padding: 32px; overflow-y: auto; }
+.modal { background: #fff; border-radius: 14px; max-width: 920px; margin: 0 auto; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #eee; }
+.modal-header h2 { color: #1a1a2e; font-size: 1.25rem; margin-bottom: 0; }
+.modal-close { background: none; border: none; font-size: 1.6rem; cursor: pointer; color: #888; line-height: 1; }
+.modal-body { padding: 20px 24px 28px; }
+.bulk-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.btn { border: none; border-radius: 8px; padding: 9px 14px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
+.btn:hover { opacity: 0.88; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: #2980b9; color: #fff; }
+.btn-danger { background: #e74c3c; color: #fff; }
+.btn-dark { background: #1a1a2e; color: #fff; }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+.section-title { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin: 24px 0 10px; }
+
+.finding { border: 1px solid #eee; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+.finding-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.finding-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.finding-title { font-weight: 600; color: #1a1a2e; }
+.finding-desc { font-size: 0.9rem; color: #555; margin: 6px 0; white-space: pre-wrap; }
+.finding-loc { font-size: 0.8rem; color: #999; font-family: monospace; }
+.finding-actions { white-space: nowrap; }
+.finding-status { font-size: 0.82rem; margin-top: 6px; }
+.spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #cbd5e1; border-top-color: #2980b9; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.fix-history-item { border: 1px solid #eee; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; font-size: 0.88rem; }
+.fix-history-item .meta { color: #888; font-size: 0.8rem; margin-top: 4px; }
