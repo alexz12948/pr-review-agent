@@ -180,21 +180,32 @@ async def run_orchestrator(pr_payload: dict) -> None:
 
     try:
         # 1. Fetch the diff
+        logger.info("[%s #%d] Fetching diff", repo, pr_number)
         diff = await get_pr_diff(repo, pr_number)
 
         # 2. Launch security and quality sessions in parallel
         sec_prompt = security_prompt(diff, pr_metadata)
         qual_prompt = quality_prompt(diff, pr_metadata)
 
+        logger.info("[%s #%d] Creating security + quality sessions", repo, pr_number)
         security_sid, quality_sid = await asyncio.gather(
             create_session(sec_prompt),
             create_session(qual_prompt),
+        )
+        logger.info(
+            "[%s #%d] Sessions created: security=%s quality=%s",
+            repo, pr_number, security_sid, quality_sid,
         )
 
         # 3. Poll both sessions in parallel
         sec_result, qual_result = await asyncio.gather(
             poll_session(security_sid),
             poll_session(quality_sid),
+        )
+        logger.info(
+            "[%s #%d] Sessions settled: security=%s quality=%s",
+            repo, pr_number,
+            sec_result.get("status_enum"), qual_result.get("status_enum"),
         )
 
         # 4. Extract structured output from each
@@ -208,6 +219,10 @@ async def run_orchestrator(pr_payload: dict) -> None:
         synth_prompt = synthesis_prompt(sec_output_str, qual_output_str, pr_metadata)
         synthesis_sid = await create_session(synth_prompt)
         synth_result = await poll_session(synthesis_sid)
+        logger.info(
+            "[%s #%d] Synthesis settled: %s",
+            repo, pr_number, synth_result.get("status_enum"),
+        )
 
         # 6. Extract the final markdown
         final_comment = _extract_output(synth_result)
@@ -215,16 +230,34 @@ async def run_orchestrator(pr_payload: dict) -> None:
         if isinstance(final_comment, dict):
             final_comment = json.dumps(final_comment, indent=2)
 
-        # 7. Post the review comment to GitHub
-        await post_review_comment(repo, pr_number, final_comment)
-
-        # 8. Parse finding counts and the individual findings
+        # 7. Parse finding counts and the individual findings *before*
+        #    posting the comment so that a comment-posting failure does
+        #    not prevent findings from being stored in the database.
         sec_counts = _parse_finding_counts(sec_output)
         qual_counts = _parse_finding_counts(qual_output)
         sec_findings = _parse_findings(sec_output)
         qual_findings = _parse_findings(qual_output)
+        logger.info(
+            "[%s #%d] Parsed findings: security=%d quality=%d",
+            repo, pr_number, sec_counts["total"], qual_counts["total"],
+        )
+
+        # 8. Post the review comment to GitHub.
+        #    This is best-effort: a failure here (e.g. 403 token permissions)
+        #    should not prevent findings from being stored in the DB.
+        comment_posted = True
+        try:
+            await post_review_comment(repo, pr_number, final_comment)
+        except Exception:
+            comment_posted = False
+            logger.exception(
+                "[%s #%d] Failed to post review comment to GitHub "
+                "(findings will still be stored)",
+                repo, pr_number,
+            )
 
         latency = time.time() - start_time
+        status = "success" if comment_posted else "partial"
 
         # 9. Update the placeholder ReviewRecord in the database
         async with async_session() as db:
@@ -254,7 +287,7 @@ async def run_orchestrator(pr_payload: dict) -> None:
                 record.orchestrator_session_id = synthesis_sid
                 record.security_session_id = security_sid
                 record.quality_session_id = quality_sid
-                record.status = "success"
+                record.status = status
                 record.has_pending_fixes = bool(sec_findings or qual_findings)
                 db.add(record)
                 await db.flush()  # ensure record.id is populated
@@ -267,7 +300,8 @@ async def run_orchestrator(pr_payload: dict) -> None:
             await db.commit()
 
         logger.info(
-            "Review completed for %s #%d (%.1fs)", repo, pr_number, latency
+            "[%s #%d] Review completed (status=%s, %.1fs)",
+            repo, pr_number, status, latency,
         )
 
     except Exception:
