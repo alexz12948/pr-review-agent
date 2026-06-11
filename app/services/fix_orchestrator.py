@@ -13,7 +13,7 @@ from app.services.github_client import (
     get_pr_metadata,
     post_review_comment,
 )
-from app.services.orchestrator import _extract_output
+from app.services.orchestrator import _extract_output, _parse_json
 from app.services.prompts import fix_batch_prompt, fix_single_prompt
 
 logger = logging.getLogger(__name__)
@@ -36,16 +36,16 @@ def _finding_to_dict(finding: Finding) -> dict:
 def _parse_fix_result(output) -> dict:
     """Parse the JSON result emitted by a fix agent.
 
-    ``output`` may be a *str* (JSON text) or a *dict*.
+    ``output`` may be a *str* (JSON text, possibly markdown-fenced) or a
+    *dict*.
     """
     result = {"status": None, "commit_sha": None, "summary": None}
-    try:
-        data = output if isinstance(output, dict) else json.loads(output)
-        if isinstance(data, dict):
-            result["status"] = data.get("status")
-            result["commit_sha"] = data.get("commit_sha")
-            result["summary"] = data.get("summary")
-    except (json.JSONDecodeError, TypeError):
+    data = _parse_json(output)
+    if data is not None:
+        result["status"] = data.get("status")
+        result["commit_sha"] = data.get("commit_sha")
+        result["summary"] = data.get("summary")
+    else:
         logger.warning("Could not parse fix result JSON; storing raw output")
         result["summary"] = str(output)[:2000] if output else None
     return result

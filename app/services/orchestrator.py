@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 
 from sqlmodel import select
@@ -13,6 +14,25 @@ from app.services.prompts import quality_prompt, security_prompt, synthesis_prom
 
 logger = logging.getLogger(__name__)
 
+# Regex to match a markdown-fenced code block (```json ... ``` or ``` ... ```)
+_FENCE_RE = re.compile(
+    r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL
+)
+
+
+def _strip_fences(text: str) -> str:
+    """Strip markdown code fences from *text* and return the inner content.
+
+    LLM responses frequently wrap JSON in ```json ... ``` blocks despite
+    being told not to.  If the text contains a fenced block, return its
+    content; otherwise return the original text stripped of leading/trailing
+    whitespace.
+    """
+    m = _FENCE_RE.search(text)
+    if m:
+        return m.group(1).strip()
+    return text.strip()
+
 
 def _extract_output(session_result: dict):
     """Extract structured output or last message from a session result.
@@ -23,18 +43,53 @@ def _extract_output(session_result: dict):
     so = session_result.get("structured_output")
     if so is not None:
         return so
-    # Fall back to the last message in the conversation
+    # Fall back to the last message in the conversation.
+    # The v1 API uses "message" as the text field, not "content".
     messages = session_result.get("messages", [])
     if messages:
-        return messages[-1].get("content", "")
+        last = messages[-1]
+        return last.get("message") or last.get("content") or ""
     return ""
+
+
+def _parse_json(output) -> dict | None:
+    """Best-effort parse of *output* into a dict.
+
+    Handles:
+    * ``dict`` returned directly by the API's ``structured_output``
+    * clean JSON strings
+    * JSON wrapped in markdown code fences (``````json … ``````)
+
+    Returns ``None`` when parsing fails.
+    """
+    if isinstance(output, dict):
+        return output
+    if not isinstance(output, str):
+        return None
+    # First try the raw string
+    try:
+        data = json.loads(output)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, ValueError):
+        pass
+    # Strip markdown fences and retry
+    cleaned = _strip_fences(output)
+    if cleaned != output:
+        try:
+            data = json.loads(cleaned)
+            if isinstance(data, dict):
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return None
 
 
 def _parse_finding_counts(output) -> dict:
     """Parse finding counts from JSON output.
 
-    ``output`` may be a *str* (JSON text) or a *dict* already parsed by the
-    API client — both are handled transparently.
+    ``output`` may be a *str* (JSON text, possibly markdown-fenced) or a
+    *dict* already parsed by the API client — both are handled transparently.
     """
     severity_keys = {"critical", "high", "medium", "low"}
     counts: dict = {
@@ -44,31 +99,36 @@ def _parse_finding_counts(output) -> dict:
         "medium": 0,
         "low": 0,
     }
-    try:
-        data = output if isinstance(output, dict) else json.loads(output)
-        findings = data.get("findings", [])
-        counts["total"] = len(findings)
-        for f in findings:
-            severity = (f.get("severity") or "").lower()
-            if severity in severity_keys:
-                counts[severity] += 1
-    except (json.JSONDecodeError, AttributeError, TypeError):
+    data = _parse_json(output)
+    if data is None:
         logger.warning("Could not parse findings JSON")
+        return counts
+    findings = data.get("findings", [])
+    if not isinstance(findings, list):
+        return counts
+    counts["total"] = len(findings)
+    for f in findings:
+        if not isinstance(f, dict):
+            continue
+        severity = (f.get("severity") or "").lower()
+        if severity in severity_keys:
+            counts[severity] += 1
     return counts
 
 
 def _parse_findings(output) -> list[dict]:
     """Parse the raw list of findings from an agent's JSON output.
 
-    ``output`` may be a *str* (JSON text) or a *dict*.
+    ``output`` may be a *str* (JSON text, possibly markdown-fenced) or a
+    *dict*.
     """
-    try:
-        data = output if isinstance(output, dict) else json.loads(output)
-        findings = data.get("findings", [])
-        if isinstance(findings, list):
-            return [f for f in findings if isinstance(f, dict)]
-    except (json.JSONDecodeError, AttributeError, TypeError):
+    data = _parse_json(output)
+    if data is None:
         logger.warning("Could not parse findings JSON")
+        return []
+    findings = data.get("findings", [])
+    if isinstance(findings, list):
+        return [f for f in findings if isinstance(f, dict)]
     return []
 
 
