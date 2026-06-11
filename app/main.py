@@ -4,9 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.config import settings
+from app.config import FRONTEND_DIST, settings
 from app.database import init_db
-from app.paths import FRONTEND_DIST
 from app.routers import webhook, dashboard
 
 

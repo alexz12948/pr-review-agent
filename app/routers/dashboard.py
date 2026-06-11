@@ -6,9 +6,9 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.config import FRONTEND_INDEX
 from app.database import get_db
 from app.models import ReviewRecord
-from app.paths import FRONTEND_INDEX
 
 router = APIRouter()
 
@@ -79,9 +79,4 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 async def dashboard():
     if os.path.exists(FRONTEND_INDEX):
         return FileResponse(FRONTEND_INDEX)
-    return HTMLResponse(
-        "<h1>Dashboard not built</h1>"
-        "<p>Run <code>cd frontend &amp;&amp; npm install &amp;&amp; npm run build</code> "
-        "to build the React dashboard.</p>",
-        status_code=503,
-    )
+    return HTMLResponse("<h1>Dashboard not built</h1>", status_code=503)
