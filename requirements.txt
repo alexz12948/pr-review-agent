@@ -4,5 +4,4 @@ httpx
 sqlmodel
 aiosqlite
 pydantic-settings
-jinja2
 python-multipart
