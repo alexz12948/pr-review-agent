@@ -22,16 +22,19 @@ async def create_session(prompt: str) -> str:
 
 
 async def poll_session(session_id: str, timeout: int = 600, interval: int = 10) -> dict:
-    """Poll a Devin session until it reaches a terminal state.
+    """Poll a Devin session until it reaches a terminal or settled state.
 
-    Returns the full response once status_enum is in ("finished", "stopped", "failed").
+    Returns the full response once status_enum is in the settled set.
+    "blocked" is included because the agent has finished its autonomous work
+    and is waiting for human input that will never arrive in this automated
+    pipeline — the output (messages / structured_output) is already available.
     Raises TimeoutError if the deadline is exceeded.
     """
     url = f"{DEVIN_API_BASE}/sessions/{session_id}"
     headers = {
         "Authorization": f"Bearer {settings.DEVIN_API_KEY}",
     }
-    terminal_states = {"finished", "stopped", "failed"}
+    terminal_states = {"finished", "stopped", "failed", "blocked"}
     elapsed = 0
 
     async with httpx.AsyncClient() as client:
