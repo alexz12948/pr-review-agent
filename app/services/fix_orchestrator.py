@@ -131,10 +131,10 @@ async def execute_fix(fix_action_id: int) -> None:
         session_id = await create_session(prompt)
 
         async with async_session() as db:
-            fa = await db.get(FixAction, fix_action_id)
-            if fa:
-                fa.devin_session_id = session_id
-                db.add(fa)
+            fix_action = await db.get(FixAction, fix_action_id)
+            if fix_action:
+                fix_action.devin_session_id = session_id
+                db.add(fix_action)
                 await db.commit()
 
         session_result = await poll_session(session_id)
