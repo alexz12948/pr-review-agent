@@ -14,11 +14,15 @@ from app.services.prompts import quality_prompt, security_prompt, synthesis_prom
 logger = logging.getLogger(__name__)
 
 
-def _extract_output(session_result: dict) -> str:
-    """Extract structured output or last message from a session result."""
-    # Prefer structured_output if available
-    if session_result.get("structured_output"):
-        return session_result["structured_output"]
+def _extract_output(session_result: dict):
+    """Extract structured output or last message from a session result.
+
+    Returns a *str* (JSON) or *dict* depending on the API version.
+    Downstream parsers accept both.
+    """
+    so = session_result.get("structured_output")
+    if so is not None:
+        return so
     # Fall back to the last message in the conversation
     messages = session_result.get("messages", [])
     if messages:
@@ -26,9 +30,14 @@ def _extract_output(session_result: dict) -> str:
     return ""
 
 
-def _parse_finding_counts(output: str) -> dict:
-    """Parse finding counts from JSON output."""
-    counts = {
+def _parse_finding_counts(output) -> dict:
+    """Parse finding counts from JSON output.
+
+    ``output`` may be a *str* (JSON text) or a *dict* already parsed by the
+    API client — both are handled transparently.
+    """
+    severity_keys = {"critical", "high", "medium", "low"}
+    counts: dict = {
         "total": 0,
         "critical": 0,
         "high": 0,
@@ -36,22 +45,25 @@ def _parse_finding_counts(output: str) -> dict:
         "low": 0,
     }
     try:
-        data = json.loads(output)
+        data = output if isinstance(output, dict) else json.loads(output)
         findings = data.get("findings", [])
         counts["total"] = len(findings)
         for f in findings:
-            severity = f.get("severity", "").lower()
-            if severity in counts:
+            severity = (f.get("severity") or "").lower()
+            if severity in severity_keys:
                 counts[severity] += 1
     except (json.JSONDecodeError, AttributeError, TypeError):
         logger.warning("Could not parse findings JSON")
     return counts
 
 
-def _parse_findings(output: str) -> list[dict]:
-    """Parse the raw list of findings from an agent's JSON output."""
+def _parse_findings(output) -> list[dict]:
+    """Parse the raw list of findings from an agent's JSON output.
+
+    ``output`` may be a *str* (JSON text) or a *dict*.
+    """
     try:
-        data = json.loads(output)
+        data = output if isinstance(output, dict) else json.loads(output)
         findings = data.get("findings", [])
         if isinstance(findings, list):
             return [f for f in findings if isinstance(f, dict)]
@@ -160,10 +172,18 @@ async def run_orchestrator(pr_payload: dict) -> None:
             if record:
                 record.security_findings = sec_counts["total"]
                 record.quality_findings = qual_counts["total"]
-                record.critical_count = sec_counts["critical"]
-                record.high_count = sec_counts["high"]
-                record.medium_count = sec_counts["medium"]
-                record.low_count = sec_counts["low"]
+                record.critical_count = (
+                    sec_counts["critical"] + qual_counts["critical"]
+                )
+                record.high_count = (
+                    sec_counts["high"] + qual_counts["high"]
+                )
+                record.medium_count = (
+                    sec_counts["medium"] + qual_counts["medium"]
+                )
+                record.low_count = (
+                    sec_counts["low"] + qual_counts["low"]
+                )
                 record.latency_seconds = latency
                 record.orchestrator_session_id = synthesis_sid
                 record.security_session_id = security_sid
