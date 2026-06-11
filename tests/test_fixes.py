@@ -237,3 +237,50 @@ async def test_stats_includes_fix_metrics():
     assert stats["fix_stats"]["total_fix_actions"] == 1
     assert stats["fix_stats"]["successful_fixes"] == 1
     assert stats["fix_stats"]["fix_success_rate"] == 1.0
+
+
+@pytest.mark.asyncio
+async def test_init_db_adds_missing_columns_to_existing_table():
+    """init_db() should ALTER an existing review_records table that predates the
+    fix-workflow columns, instead of leaving them missing (create_all does not
+    ALTER existing tables)."""
+    from sqlmodel import SQLModel
+
+    from app.database import engine
+
+    # Simulate a pre-existing DB: drop the new columns from review_records.
+    async with engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
+        await conn.exec_driver_sql(
+            "CREATE TABLE review_records ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, repo VARCHAR, pr_number INTEGER, "
+            "head_sha VARCHAR, status VARCHAR, created_at DATETIME)"
+        )
+        await conn.exec_driver_sql(
+            "INSERT INTO review_records (repo, pr_number, head_sha, status) "
+            "VALUES ('owner/repo', 1, 'sha', 'success')"
+        )
+
+    # Run twice to confirm the migration is idempotent.
+    await init_db()
+    await init_db()
+
+    async with engine.begin() as conn:
+        rows = await conn.exec_driver_sql("PRAGMA table_info(review_records)")
+        cols = {r[1] for r in rows.fetchall()}
+    assert "fix_actions_count" in cols
+    assert "has_pending_fixes" in cols
+
+    # The new columns are now writable, and the pre-existing row got defaults.
+    async with async_session() as db:
+        review = await db.get(ReviewRecord, 1)
+        assert review.fix_actions_count == 0
+        assert review.has_pending_fixes in (False, 0)
+        review.fix_actions_count = 3
+        review.has_pending_fixes = True
+        db.add(review)
+        await db.commit()
+
+    async with async_session() as db:
+        review = await db.get(ReviewRecord, 1)
+        assert review.fix_actions_count == 3
