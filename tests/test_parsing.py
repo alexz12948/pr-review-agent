@@ -8,12 +8,56 @@ import json
 import pytest
 
 from app.services.orchestrator import (
+    _extract_output,
     _parse_finding_counts,
     _parse_findings,
     _parse_json,
     _strip_fences,
 )
 from app.services.fix_orchestrator import _parse_fix_result
+
+
+# ---------------------------------------------------------------------------
+# _extract_output
+# ---------------------------------------------------------------------------
+
+class TestExtractOutput:
+    def test_structured_output_dict(self):
+        """structured_output as dict is returned directly."""
+        result = {"structured_output": {"findings": []}, "messages": []}
+        assert _extract_output(result) == {"findings": []}
+
+    def test_structured_output_string(self):
+        """structured_output as string is returned directly."""
+        result = {"structured_output": '{"findings": []}', "messages": []}
+        assert _extract_output(result) == '{"findings": []}'
+
+    def test_v1_api_message_field(self):
+        """v1 API uses 'message' not 'content' in message objects."""
+        result = {
+            "structured_output": None,
+            "messages": [
+                {"type": "initial_user_message", "message": "prompt text"},
+                {"type": "devin_message", "message": '{"findings": [{"severity": "high"}]}'},
+            ],
+        }
+        output = _extract_output(result)
+        assert output == '{"findings": [{"severity": "high"}]}'
+
+    def test_content_field_fallback(self):
+        """Falls back to 'content' if 'message' is not present."""
+        result = {
+            "structured_output": None,
+            "messages": [{"content": '{"findings": []}'}],
+        }
+        assert _extract_output(result) == '{"findings": []}'
+
+    def test_no_messages(self):
+        result = {"structured_output": None, "messages": []}
+        assert _extract_output(result) == ""
+
+    def test_empty_result(self):
+        assert _extract_output({}) == ""
 
 
 # ---------------------------------------------------------------------------

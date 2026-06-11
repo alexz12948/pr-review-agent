@@ -43,10 +43,12 @@ def _extract_output(session_result: dict):
     so = session_result.get("structured_output")
     if so is not None:
         return so
-    # Fall back to the last message in the conversation
+    # Fall back to the last message in the conversation.
+    # The v1 API uses "message" as the text field, not "content".
     messages = session_result.get("messages", [])
     if messages:
-        return messages[-1].get("content", "")
+        last = messages[-1]
+        return last.get("message") or last.get("content") or ""
     return ""
 
 
